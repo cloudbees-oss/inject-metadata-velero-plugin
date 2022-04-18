@@ -1,0 +1,6 @@
+_output
+inject-metadata-velero-plugin
+
+.go
+
+_tiltbuild
