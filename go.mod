@@ -7,7 +7,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/vmware-tanzu/velero v1.7.0
 	k8s.io/api v0.20.9
-	k8s.io/apimachinery v0.22.3
+	k8s.io/apimachinery v0.23.6
 )
 
 replace github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
