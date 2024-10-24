@@ -23,3 +23,4 @@ initContainers:
 Binaries are [signed with Sigstore](https://docs.sigstore.dev/cosign/openid_signing).
 
 [Kubernetes feature #48180](https://github.com/kubernetes/kubernetes/issues/48180), if implemented, would offer an alternate approach.
+
