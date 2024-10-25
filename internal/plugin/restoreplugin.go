@@ -22,6 +22,7 @@ import (
 	"github.com/vmware-tanzu/velero/pkg/plugin/velero"
 	apps "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -43,7 +44,7 @@ func NewRestorePlugin(log logrus.FieldLogger) *RestorePlugin {
 // selector. A zero-valued ResourceSelector matches all resources.
 func (p *RestorePlugin) AppliesTo() (velero.ResourceSelector, error) {
 	return velero.ResourceSelector{
-		IncludedResources: []string{"statefulsets"},
+		IncludedResources: []string{"statefulsets", "deployments"},
 	}, nil
 }
 
@@ -52,25 +53,46 @@ const envVarName = "RESTORED_FROM_BACKUP"
 // Execute allows the RestorePlugin to perform arbitrary logic with the item being restored,
 // in this case, setting a custom annotation on the item being restored.
 func (p *RestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) (*velero.RestoreItemActionExecuteOutput, error) {
+	var resource interface{}
 	var sts apps.StatefulSet
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(input.Item.UnstructuredContent(), &sts); err != nil {
+	var deploy apps.Deployment
+	kind := input.Item.GetObjectKind().GroupVersionKind().Kind
+	if kind == "StatefulSet" {
+		resource = &sts
+	} else if kind == "Deployment" {
+		resource = &deploy
+	} else {
+		return nil, errors.Errorf("unsupported kind %s", kind)
+	}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(input.Item.UnstructuredContent(), resource); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	log := p.log.WithField("sts", sts.Name)
-
-	for i := range sts.Spec.Template.Spec.Containers {
+	var name string
+	var podTemplateSpec *v1.PodTemplateSpec
+	if kind == "StatefulSet" {
+		name = sts.Name
+		podTemplateSpec = &sts.Spec.Template
+	} else if kind == "Deployment" {
+		name = deploy.Name
+		podTemplateSpec = &deploy.Spec.Template
+	} else {
+		return nil, errors.Errorf("unsupported kind %s", kind)
+	}
+	log := p.log.WithField("kind", kind).WithField("name", name)
+	log.Infof("Looking for containers")
+	for i := range podTemplateSpec.Spec.Containers {
 		var env []core.EnvVar
-		for _, v := range sts.Spec.Template.Spec.Containers[i].Env {
+		for _, v := range podTemplateSpec.Spec.Containers[i].Env {
 			if v.Name != envVarName {
 				env = append(env, v)
 			}
 		}
 		env = append(env, core.EnvVar{Name: envVarName, Value: input.Restore.Name})
-		sts.Spec.Template.Spec.Containers[i].Env = env
-		log.Infof("Added %s to environment of container %s", envVarName, sts.Spec.Template.Spec.Containers[i].Name)
+		podTemplateSpec.Spec.Containers[i].Env = env
+		log.Infof("Added %s to environment of container %s", envVarName, podTemplateSpec.Spec.Containers[i].Name)
 	}
 
-	inputMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&sts)
+	inputMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(resource)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}

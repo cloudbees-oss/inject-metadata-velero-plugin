@@ -1,5 +1,5 @@
 A [restore plugin for Velero](https://velero.io/docs/v1.8/custom-plugins/#plugin-kinds)
-which mutates all restored `StatefulSet`s,
+which mutates all restored `StatefulSet`s and `Deployment`s,
 adding (or replacing) the environment variable `RESTORED_FROM_BACKUP` in each container.
 The value will be the identifier of the Velero restore object.
 
